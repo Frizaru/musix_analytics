@@ -1,0 +1,141 @@
+-- ЗАПРОС 1: Топ-10 треков по прослушиваниям
+-- SELECT tr.track_id, CONCAT(ar.artist_name, ' — ', tr.track_name) AS track_artist_name, COUNT(listen_id) AS listen_count
+-- FROM listens
+-- LEFT JOIN tracks tr ON tr.track_id = listens.track_id
+-- LEFT JOIN artists ar ON ar.artist_id = listens.artist_id
+-- GROUP BY tr.track_id, ar.artist_name, tr.track_name
+-- ORDER BY listen_count DESC
+-- LIMIT 10;
+
+-- ЗАПРОС 2: Топ-5 артистов по уникальным слушателям
+-- SELECT ar.artist_name, COUNT(DISTINCT users.user_id) AS unique_users
+-- FROM listens l
+-- LEFT JOIN artists ar ON ar.artist_id = l.artist_id
+-- LEFT JOIN users ON users.user_id = l.user_id
+-- GROUP BY ar.artist_name
+-- ORDER BY unique_users DESC
+-- LIMIT 5;
+
+-- ЗАПРОС 3: Среднее число прослушиваний любимого исполнителя среди пользователей
+-- WITH count_for_each AS (
+--     SELECT ar.artist_name, u.user_id, COUNT(l.listen_id) AS listen_count
+--     FROM listens l
+--     LEFT JOIN users u ON u.user_id = l.user_id
+--     LEFT JOIN artists ar ON ar.artist_id = l.artist_id
+--     GROUP BY u.user_id, ar.artist_name
+--     ORDER BY user_id
+-- ),
+-- max_listens AS (
+--     SELECT user_id, MAX(listen_count) AS max_listen_count
+--     FROM count_for_each
+--     GROUP BY user_id
+-- )
+-- SELECT ROUND(AVG(max_listen_count), 1) AS avg_top_artist_listens
+-- FROM max_listens;
+
+-- ЗАПРОС 4: MAU (Monthly Active Users)
+-- SELECT
+--     DATE_FORMAT(listen_date, '%Y-%M') AS month,
+--     COUNT(DISTINCT user_id) AS MAU
+-- FROM listens
+-- GROUP BY month
+-- ORDER BY month;
+
+-- ЗАПРОС 5: DAU (Daily Active Users) за январь
+-- WITH unique_users AS (
+--     SELECT
+--         DATE_FORMAT(listen_date, '%Y-%m-%d') AS day,
+--         COUNT(DISTINCT user_id) AS count_of_unique_users
+--     FROM listens
+--     WHERE MONTH(listen_date) = 1
+--     GROUP BY day
+--     ORDER BY day DESC
+-- )
+-- SELECT * FROM unique_users;
+
+-- ЗАПРОС 6: DAU/MAU (Stickiness) за январь
+-- WITH MAU_jan AS (
+--     SELECT COUNT(DISTINCT user_id) AS MAU
+--     FROM listens
+--     WHERE MONTH(listen_date) = 1
+-- ),
+-- DAU_jan AS (
+--     SELECT ROUND(AVG(daily_users)) AS avg_DAU
+--     FROM (
+--         SELECT DATE(listen_date) AS day, COUNT(DISTINCT user_id) AS daily_users
+--         FROM listens
+--         WHERE MONTH(listen_date) = 1
+--         GROUP BY DATE(listen_date)
+--     ) t
+-- )
+-- SELECT ROUND((dm.avg_DAU / mm.MAU) * 100, 2) AS stickiness
+-- FROM DAU_jan dm
+-- CROSS JOIN MAU_jan mm;
+
+-- ЗАПРОС 7: Retention Rate (Week 1) для январских пользователей
+-- WITH g_o_not AS (
+--     SELECT u.user_id AS user,
+--     CASE
+--         WHEN l.listen_date >= u.registration_date
+--          AND l.listen_date < u.registration_date + INTERVAL 7 DAY
+--         THEN 'хороший'
+--         ELSE 'нет'
+--     END AS criteria
+--     FROM users u
+--     LEFT JOIN listens l ON l.user_id = u.user_id
+--     WHERE u.registration_date BETWEEN '2024-01-01' AND '2024-01-31'
+-- ),
+-- good AS (
+--     SELECT * FROM g_o_not
+--     WHERE g_o_not.criteria = 'хороший'
+-- )
+-- SELECT ROUND((COUNT(DISTINCT good.user) / COUNT(DISTINCT g_o_not.user))  * 100, 2) AS retention
+-- FROM g_o_not
+-- CROSS JOIN good;
+
+-- ЗАПРОС 8: Когортный анализ
+-- WITH user_cohorts AS (
+--     SELECT user_id, registration_date, YEARWEEK(registration_date, 1) AS cohort_week
+--     FROM users
+-- ),
+-- cohort_sizes AS (
+--     SELECT cohort_week, COUNT(DISTINCT user_id) AS cohort_size
+--     FROM user_cohorts
+--     GROUP BY cohort_week
+-- ),
+-- user_activity AS (
+--     SELECT DISTINCT uc.user_id, uc.cohort_week, TIMESTAMPDIFF(WEEK, uc.registration_date, l.listen_date) AS week_diff
+--     FROM user_cohorts uc
+--     JOIN listens l ON l.user_id = uc.user_id
+--     WHERE l.listen_date >= uc.registration_date AND TIMESTAMPDIFF(WEEK, uc.registration_date, l.listen_date) BETWEEN 0 AND 3
+-- ),
+-- active_users AS (
+--     SELECT cohort_week, week_diff, COUNT(DISTINCT user_id) AS active_users
+--     FROM user_activity
+--     GROUP BY cohort_week, week_diff
+-- )
+-- SELECT
+--     cs.cohort_week,
+--     100 AS week0,
+--     ROUND(COALESCE(MAX(CASE WHEN au.week_diff = 1 THEN au.active_users END), 0) / cs.cohort_size * 100) AS week1,
+--     ROUND(COALESCE(MAX(CASE WHEN au.week_diff = 2 THEN au.active_users END), 0) / cs.cohort_size * 100) AS week2,
+--     ROUND(COALESCE(MAX(CASE WHEN au.week_diff = 3 THEN au.active_users END), 0) / cs.cohort_size * 100) AS week3
+-- FROM cohort_sizes cs
+-- LEFT JOIN active_users au ON au.cohort_week = cs.cohort_week
+-- GROUP BY cs.cohort_week, cs.cohort_size
+-- ORDER BY cs.cohort_week;
+
+
+-- ДОБИВКА ДАШБОРДА
+
+-- ЗАПРОС 9: Общее число прослушиваний
+-- SELECT COUNT(listens.listen_id) AS all_streams
+-- FROM listens;
+
+-- ЗАПРОС 10: Общее число уникальных юзеров
+-- SELECT COUNT(DISTINCT user_id) AS unique_users FROM users;
+
+-- ЗАПРОС 11: Пользователи по подписке
+-- SELECT u.subscription_type AS sub_type, COUNT(DISTINCT u.user_id) AS amount
+-- FROM users u
+-- GROUP BY u.subscription_type
