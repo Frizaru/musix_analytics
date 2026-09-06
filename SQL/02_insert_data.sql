@@ -1,3 +1,5 @@
+USE musix_analytics;
+
 INSERT INTO users (username, country, subscription_type, registration_date) VALUES
 ('rehaber', 'Russia', 'premium', '2024-01-01'),
 ('pop_girl', 'Russia', 'premium', '2024-01-01'),

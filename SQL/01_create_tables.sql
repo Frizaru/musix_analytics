@@ -1,3 +1,9 @@
+CREATE DATABASE IF NOT EXISTS musix_analytics
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+USE musix_analytics;
+
 DROP TABLE IF EXISTS listens;
 DROP TABLE IF EXISTS tracks;
 DROP TABLE IF EXISTS albums;
@@ -10,7 +16,9 @@ CREATE TABLE users (
     username VARCHAR(50) NOT NULL,
     country VARCHAR(30) NOT NULL,
     subscription_type VARCHAR(20) NOT NULL,
-    registration_date DATE NOT NULL
+    registration_date DATE NOT NULL,
+    CONSTRAINT chk_users_subscription_type
+        CHECK (subscription_type IN ('free', 'premium', 'family'))
 );
 
 -- ИСПОЛНИТЕЛИ
@@ -27,7 +35,10 @@ CREATE TABLE albums (
     album_name VARCHAR(50) NOT NULL,
     tracks_amount INT NOT NULL,
     release_date DATE NOT NULL,
-    FOREIGN KEY (artist_id) REFERENCES artists(artist_id)
+    CONSTRAINT chk_albums_tracks_amount CHECK (tracks_amount > 0),
+    CONSTRAINT uq_albums_album_artist UNIQUE (album_id, artist_id),
+    CONSTRAINT fk_albums_artist
+        FOREIGN KEY (artist_id) REFERENCES artists(artist_id)
 );
 
 -- ТРЕКИ
@@ -39,8 +50,14 @@ CREATE TABLE tracks (
     duration INT NOT NULL,
     genre VARCHAR(50) NOT NULL,
     release_date DATE NOT NULL,
-    FOREIGN KEY (artist_id) REFERENCES artists(artist_id),
-    FOREIGN KEY (album_id) REFERENCES albums(album_id)
+    CONSTRAINT chk_tracks_duration CHECK (duration > 0),
+    CONSTRAINT uq_tracks_track_artist_album
+        UNIQUE (track_id, artist_id, album_id),
+    CONSTRAINT fk_tracks_artist
+        FOREIGN KEY (artist_id) REFERENCES artists(artist_id),
+    CONSTRAINT fk_tracks_album_artist
+        FOREIGN KEY (album_id, artist_id)
+        REFERENCES albums(album_id, artist_id)
 );
 
 -- ПРОСЛУШИВАНИЯ
@@ -51,8 +68,9 @@ CREATE TABLE listens (
     track_id INT NOT NULL,
     album_id INT NOT NULL,
     listen_date DATETIME NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(user_id),
-    FOREIGN KEY (artist_id) REFERENCES artists(artist_id),
-    FOREIGN KEY (track_id) REFERENCES tracks(track_id),
-    FOREIGN KEY (album_id) REFERENCES albums(album_id)
+    CONSTRAINT fk_listens_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id),
+    CONSTRAINT fk_listens_track_artist_album
+        FOREIGN KEY (track_id, artist_id, album_id)
+        REFERENCES tracks(track_id, artist_id, album_id)
 );
